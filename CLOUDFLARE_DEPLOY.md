@@ -125,3 +125,90 @@ directly.
 6. **Live content**: edit something in Property Content, confirm it saves.
    Reminder: the guest site won't reflect it yet — its live-fetch from
    `property_content` is still the flagged follow-up, not built.
+
+## Troubleshooting a live deployment
+
+### Signup shows a blank / `{}` error
+
+This is almost always Supabase Auth failing to send the confirmation
+email through a custom SMTP provider (Brevo, etc.) — GoTrue's error
+response in that case doesn't always have a normal `.message`, so it can
+render as an empty-looking error. Check, in order:
+
+1. **Supabase dashboard → Authentication → Emails → SMTP Settings**: is
+   "Enable Custom SMTP" actually on, and do the host/port/username/password
+   match Brevo's SMTP credentials exactly (`smtp-relay.brevo.com`, port
+   `587`, login = your Brevo SMTP login, not your account email)?
+2. **Sender address**: Brevo requires the "From" address to be a verified
+   sender or domain in your Brevo account. An unverified sender is the
+   single most common cause of silent send failures.
+3. **Fastest unblock for testing**: Authentication → Providers → Email →
+   turn **"Confirm email" off**. This CMS's real gate is Super Admin
+   approval (`staff_profiles.status`), not email confirmation — email
+   confirmation was never load-bearing here, so it's safe to leave off for
+   an internal staff tool, not just during testing.
+4. This app's `app/signup/page.tsx` now logs the raw Supabase error object
+   to the browser console and shows a specific fallback message instead of
+   a bare `{}` — if you still see a blank error after redeploying, open
+   devtools and check the console for the actual error object.
+
+### Bootstrapped Super Admin still lands on "pending approval"
+
+Creating a user from **Supabase dashboard → Authentication → Users → Add
+user** only creates the `auth.users` row — it does **not** create a
+matching `staff_profiles` row, because that insert normally happens inside
+`app/signup/page.tsx`'s own code, which a dashboard-created user never
+runs. With no `staff_profiles` row at all, `RequireAuth` treats that the
+same as "pending" and redirects there — indefinitely, no matter what.
+
+Fix: in the Supabase SQL editor, find the user's real id and upsert a
+profile for it directly:
+
+```sql
+select id, email from auth.users where email = 'you@example.com';
+
+insert into public.staff_profiles (id, full_name, email, role, status)
+values ('<uuid-from-above>', 'Your Name', 'you@example.com', 'super_admin', 'active')
+on conflict (id) do update set role = 'super_admin', status = 'active';
+```
+
+If you signed up through `/signup` instead (so a `pending` row *does*
+exist already), just update it rather than inserting:
+
+```sql
+update public.staff_profiles
+set status = 'active', role = 'super_admin'
+where email = 'you@example.com';
+```
+
+### Locked out of the whole portal / weird errors on every page
+
+If this happens on *every* page, not just signup, the most likely cause
+is a stale `middleware.ts` (or `open-next.config.ts` / `wrangler.jsonc`
+pointing at a Worker build) still present in the repo. Next.js still
+compiles a middleware bundle even with `output: "export"` — it only warns,
+it doesn't fail the build — and **Cloudflare Pages' Next.js framework
+preset will pick that up and run it as a Pages Function on every request**,
+using the old server-side auth logic this app no longer relies on. That
+old logic fighting the new client-side `RequireAuth` is exactly what
+produces "authorized in the database but still redirected" symptoms.
+
+Confirm this is/isn't happening:
+
+```bash
+rm -rf .next out
+npm run build
+```
+
+Check the build output. If you see a line like `ƒ Middleware   91 kB`,
+`middleware.ts` still exists somewhere in the repo — delete it (along with
+`open-next.config.ts` and `wrangler.jsonc`, if present; neither belongs in
+a static export). A clean static build should show only `○ (Static)`
+routes and no `ƒ Middleware` line.
+
+Also check the Cloudflare Pages project itself: **Settings → Builds &
+deployments → Framework preset** should not be set to "Next.js" (that
+preset assumes an SSR app and wraps the build accordingly). With a static
+export, set it to **None**, with:
+- Build command: `npm run build`
+- Build output directory: `out`

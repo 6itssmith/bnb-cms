@@ -23,7 +23,19 @@ export default function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
 
     if (signUpError) {
-      setError(signUpError.message);
+      // Custom SMTP providers (e.g. Brevo) that reject or fail to send the
+      // confirmation email can make Supabase return an error whose
+      // `.message` is empty or missing — that's what shows up as a bare
+      // "{}" instead of a real message. Logging the raw object is the only
+      // way to see what actually happened in that case; the checklist in
+      // CLOUDFLARE_DEPLOY.md ("Signup shows a blank / {} error") walks
+      // through the likely SMTP misconfiguration.
+      console.error("Sign up error:", signUpError);
+      setError(
+        signUpError.message && signUpError.message.trim().length > 0
+          ? signUpError.message
+          : "Sign up failed while sending the confirmation email. This usually means the SMTP provider (e.g. Brevo) rejected it — check the sender address is verified, or disable email confirmation in Supabase Auth settings while testing. See browser console for details."
+      );
       setLoading(false);
       return;
     }
@@ -48,7 +60,12 @@ export default function SignupPage() {
     });
 
     if (profileError) {
-      setError(profileError.message);
+      console.error("Profile insert error:", profileError);
+      setError(
+        profileError.message && profileError.message.trim().length > 0
+          ? profileError.message
+          : "Account created, but couldn't save your profile. Check the browser console for details, or contact a Super Admin."
+      );
       setLoading(false);
       return;
     }
