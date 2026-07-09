@@ -7,3 +7,4 @@ out
 .DS_Store
 .aura-crib-cms/
 .guest-site/
+*.MD
