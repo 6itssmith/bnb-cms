@@ -1,17 +1,32 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getStaffProfile, canManage } from "@/lib/auth";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useStaffProfile } from "@/lib/StaffProfileContext";
+import { canManage } from "@/lib/auth";
 import ReportsExplorer from "@/components/ReportsExplorer";
+import { PageLoading, NotPermitted } from "@/components/PageStates";
 import type { Booking } from "@/lib/types";
 
-export const metadata = { title: "Reports | Aura Crib CMS" };
+export default function ReportsPage() {
+  const { profile, loading: profileLoading } = useStaffProfile();
+  const [bookings, setBookings] = useState<Booking[] | null>(null);
 
-export default async function ReportsPage() {
-  const profile = await getStaffProfile();
-  if (!canManage(profile)) redirect("/");
+  useEffect(() => {
+    document.title = "Reports | Aura Crib CMS";
+    if (profileLoading || !canManage(profile)) return;
+    const supabase = createClient();
+    supabase
+      .from("bookings")
+      .select("*")
+      .order("check_in", { ascending: false })
+      .limit(1000)
+      .then(({ data }) => setBookings((data as Booking[]) ?? []));
+  }, [profileLoading, profile]);
 
-  const supabase = await createClient();
-  const { data } = await supabase.from("bookings").select("*").order("check_in", { ascending: false }).limit(1000);
+  if (profileLoading) return <PageLoading />;
+  if (!canManage(profile)) return <NotPermitted />;
+  if (bookings === null) return <PageLoading />;
 
   return (
     <div className="space-y-6">
@@ -22,7 +37,7 @@ export default async function ReportsPage() {
         </p>
       </div>
 
-      <ReportsExplorer bookings={(data as Booking[]) ?? []} />
+      <ReportsExplorer bookings={bookings} />
     </div>
   );
 }

@@ -56,14 +56,21 @@ export default function BookingDetailDrawer({
   async function refundBooking() {
     setBusy("refund");
     setError(null);
+    const supabase = createClient();
     try {
-      const res = await fetch(`/api/bookings/${booking.id}/refund`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "Refunded from CMS by staff" }),
+      // No server to proxy this through in a static build, so this calls
+      // the refund-payment Edge Function directly. supabase.functions.invoke
+      // automatically attaches the current user's access token — the
+      // function itself verifies that token and checks the caller is an
+      // active manager/super_admin before touching Stripe/PayPal/M-Pesa or
+      // writing the audit log entry (see guest-site's
+      // supabase/functions/refund-payment). No secret ever reaches the
+      // browser; the service-role key stays inside the Edge Function.
+      const { data, error: fnError } = await supabase.functions.invoke("refund-payment", {
+        body: { bookingId: booking.id, reason: "Refunded from CMS by staff" },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Refund failed");
+      if (fnError) throw new Error(fnError.message);
+      if (data?.error) throw new Error(data.error);
       onUpdated({ ...booking, status: "cancelled" });
       setConfirmRefund(false);
     } catch (e) {

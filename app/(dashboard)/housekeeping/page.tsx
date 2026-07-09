@@ -1,18 +1,31 @@
-import { createClient } from "@/lib/supabase/server";
-import { getStaffProfile, canManage } from "@/lib/auth";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useStaffProfile } from "@/lib/StaffProfileContext";
+import { canManage } from "@/lib/auth";
 import HousekeepingBoard from "@/components/HousekeepingBoard";
+import { PageLoading } from "@/components/PageStates";
 import type { HousekeepingTask, StaffProfile } from "@/lib/types";
 
-export const metadata = { title: "Housekeeping | Aura Crib CMS" };
+export default function HousekeepingPage() {
+  const { profile } = useStaffProfile();
+  const [tasks, setTasks] = useState<HousekeepingTask[] | null>(null);
+  const [staff, setStaff] = useState<StaffProfile[]>([]);
 
-export default async function HousekeepingPage() {
-  const supabase = await createClient();
-  const profile = await getStaffProfile();
+  useEffect(() => {
+    document.title = "Housekeeping | Aura Crib CMS";
+    const supabase = createClient();
+    Promise.all([
+      supabase.from("housekeeping_tasks").select("*").order("due_date", { ascending: true }),
+      supabase.from("staff_profiles").select("*").eq("status", "active"),
+    ]).then(([{ data: taskData }, { data: staffData }]) => {
+      setTasks((taskData as HousekeepingTask[]) ?? []);
+      setStaff((staffData as StaffProfile[]) ?? []);
+    });
+  }, []);
 
-  const [{ data: tasks }, { data: staff }] = await Promise.all([
-    supabase.from("housekeeping_tasks").select("*").order("due_date", { ascending: true }),
-    supabase.from("staff_profiles").select("*").eq("status", "active"),
-  ]);
+  if (tasks === null) return <PageLoading />;
 
   return (
     <div className="space-y-6">
@@ -25,8 +38,8 @@ export default async function HousekeepingPage() {
       </div>
 
       <HousekeepingBoard
-        tasks={(tasks as HousekeepingTask[]) ?? []}
-        staff={(staff as StaffProfile[]) ?? []}
+        tasks={tasks}
+        staff={staff}
         currentStaffId={profile?.id ?? ""}
         canManage={canManage(profile)}
       />

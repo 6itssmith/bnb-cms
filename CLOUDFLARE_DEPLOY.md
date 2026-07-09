@@ -1,132 +1,127 @@
-# Deploying to Cloudflare
+# Deploying the Aura Crib CMS to Cloudflare
 
-Two different Cloudflare products, because the two apps are different shapes:
+**This supersedes the earlier version of this doc**, which set up the CMS
+as a full Next.js server on Cloudflare Workers via `@opennextjs/cloudflare`.
+The CMS is now a **static export** instead (`output: "export"` in
+`next.config.js`) — plain HTML/JS/CSS in `out/`, no server at runtime.
+Deploys to **Cloudflare Pages**, same as the guest site.
 
-| | This CMS | Guest site (`aura-crib`) |
-|---|---|---|
-| Next.js output | normal (SSR + middleware) | `output: "export"` (fully static) |
-| Cloudflare product | **Workers**, via the OpenNext adapter | **Pages** (static) |
-| Why | middleware needs a real server to enforce auth before a page renders | no server needed — just HTML/CSS/JS |
+## Why this changed, and what moved
 
----
+The CMS originally needed a server for one reason: `middleware.ts` had to
+run per-request, server-side, to redirect unauthenticated/unapproved staff
+before a dashboard page ever rendered. Static export has no server to run
+that on.
 
-## A. CMS → Cloudflare Workers (OpenNext)
+What replaced it:
 
-This repo is already wired for it: `@opennextjs/cloudflare`, `wrangler.jsonc`,
-`open-next.config.ts` are all in place.
+| Before (server) | Now (static) |
+|---|---|
+| `middleware.ts` redirects before render | `components/RequireAuth.tsx` redirects client-side, after the Supabase session resolves in the browser — see `lib/StaffProfileContext.tsx` |
+| `lib/supabase/server.ts` (cookie-based session, Server Components) | `lib/supabase/client.ts` only — plain `@supabase/supabase-js`, session in `localStorage` |
+| `lib/auth.ts`'s `getStaffProfile()` fetched server-side per request | Same data now lives in `StaffProfileContext`, fetched once client-side and kept in sync via `onAuthStateChange` |
+| `app/api/bookings/[id]/refund/route.ts` held the service-role key server-side, called the Edge Function on the CMS's behalf | Deleted. `BookingDetailDrawer.tsx` calls the `refund-payment` Edge Function **directly** with the signed-in staff member's own session — the Edge Function now verifies that caller's JWT + role itself. See "Refunds without a server" below. |
 
-### 1. Prerequisites
-- A Cloudflare account
-- Node 18+
-- `npx wrangler login` (opens a browser to authenticate the CLI)
+**What did *not* change:** Row Level Security is still the actual
+enforcement layer (`guest-site/supabase/migrations/002_cms.sql`). Every
+page-level check in this app (`canManage`, `isSuperAdmin`, the redirect in
+`RequireAuth`) is UX only, exactly as it was described when this was a
+server app — the difference is only *where* that UX check runs now.
 
-### 2. Environment variables
+## Refunds without a server
 
-**Public** (baked into the client bundle at build time) — set these in
-`.env` locally, or as Cloudflare Pages/Workers "Build variables" if you
-build in CI:
-```
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
-```
+This was the one place the CMS held a secret (`SUPABASE_SERVICE_ROLE_KEY`)
+server-side. A static app has nowhere safe to put that, so the design
+changed: the CMS never holds that key at all anymore. Instead,
+`refund-payment` (in `guest-site/supabase/functions/refund-payment`) now:
 
-**Secret** (server-only, never in the client bundle) — set these directly
-on the Worker, not in `.env`:
+1. Reads the `Authorization` header `supabase.functions.invoke` attaches
+   automatically — the signed-in staff member's own access token, not a
+   shared secret.
+2. Verifies that token is a real, current session (`auth.getUser(jwt)`).
+3. Looks up that user's `staff_profiles` row (using the service-role key,
+   which lives only in the function's own Edge Function secrets) and
+   confirms `status = 'active'` and `role` is `manager` or `super_admin`.
+4. Only then calls Stripe/PayPal and writes the audit log entry.
+
+**You need to redeploy this function** if you haven't already, since its
+auth check changed:
+
 ```bash
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-```
-Paste the value when prompted. Repeat for any other server-only secret
-this app reads (e.g. if you add Stripe/PayPal admin actions later).
-
-### 3. Build + deploy
-```bash
-npm install
-npm run build                     # next build
-npx opennextjs-cloudflare build    # transforms the Next.js build for Workers
-npx wrangler deploy               # ships .open-next/worker.js + assets
+cd guest-site
+npx supabase functions deploy refund-payment
 ```
 
-Or add these as scripts (optional convenience) to `package.json`:
-```json
-"cf:build": "next build && opennextjs-cloudflare build",
-"cf:preview": "opennextjs-cloudflare preview",
-"cf:deploy": "opennextjs-cloudflare build && wrangler deploy"
-```
-then just run `npm run cf:deploy`.
+The updated source is at
+`guest-site/supabase/functions/refund-payment/index.ts` — if you're
+working from an older copy of the guest site repo, copy that file in
+before deploying.
 
-### 4. Preview locally before shipping
-```bash
-npx opennextjs-cloudflare preview
-```
-Runs the actual Worker build locally via `wrangler dev` — closer to
-production than `next dev`, useful for catching Edge-runtime-only issues.
+## Deploying the CMS
 
-### 5. Custom domain
-Cloudflare dashboard → **Workers & Pages** → your `aura-crib-cms` worker →
-**Settings → Domains & Routes** → add e.g. `admin.auracrib.co.ke`.
+### Dashboard (connect the repo)
 
-### 6. Known-safe build warning
-You'll see this during `next build` — it's expected and non-fatal:
-```
-A Node.js API is used (process.version) which is not supported in the Edge Runtime.
-Import trace: @supabase/supabase-js → @supabase/ssr/createBrowserClient
-```
-`@supabase/ssr` re-exports both its browser and server client from the same
-module, so this reference gets pulled into the bundle even though
-`middleware.ts` only calls `createServerClient`. `nodejs_compat` in
-`wrangler.jsonc` (already set) polyfills `process` on Cloudflare Workers, so
-this doesn't break anything at runtime — just noise in the build log.
-
-### 7. Post-deploy checklist
-- Visit `/login` — should render (not redirect-loop).
-- Try a dashboard URL while logged out — should redirect to `/login`.
-- Log in with a `pending` staff account — should redirect to `/pending-approval`.
-- Confirm Supabase Auth cookies are being set on your CMS domain (check
-  DevTools → Application → Cookies) — if you changed the domain, make sure
-  it's added under Supabase **Auth → URL Configuration → Redirect URLs**.
-
----
-
-## B. Guest site → Cloudflare Pages (static)
-
-The guest site builds to a plain folder of HTML/CSS/JS (`out/`) — no
-adapter, no Worker, no server.
-
-### 1. Via the Cloudflare dashboard
-1. **Workers & Pages → Create → Pages → Connect to Git** (or **Direct Upload**
-   if you'd rather not connect a repo).
+1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** →
+   **Connect to Git**.
 2. Build settings:
-   - Framework preset: `Next.js (Static HTML Export)` — or `None`, either works since the config already sets `output: "export"`.
-   - Build command: `npm run build`
-   - Build output directory: `out`
-3. Environment variables (Pages project → **Settings → Environment variables**,
-   set for both Production and Preview):
+   - **Root directory**: `aura-crib-cms` (or wherever this app lives in
+     your repo)
+   - **Build command**: `npm run build`
+   - **Build output directory**: `out`
+3. Environment variables (Settings → Environment variables), same for
+   Production and Preview:
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
    ```
-   (These are the only two the guest site needs — everything else, including
-   all payment provider secrets, lives in Supabase Edge Function secrets, not
-   here.)
-4. Save and deploy. Cloudflare rebuilds on every push to the connected branch.
+   That's the complete list — there's no service-role key or any other
+   server-only variable to set here anymore.
+4. Save and deploy.
 
-### 2. Via Wrangler CLI instead (no dashboard, no Git connection needed)
+### CLI alternative
+
 ```bash
+cd aura-crib-cms
 npm install
-npm run build                 # outputs to ./out
-npx wrangler pages deploy out --project-name=aura-crib-guest
+npm run deploy    # runs: next build && wrangler pages deploy out --project-name=aura-crib-cms
 ```
 
-### 3. Custom domain
-Pages project → **Custom domains** → add e.g. `auracrib.co.ke` and `www.auracrib.co.ke`.
+### Custom domain
 
-### 4. Notes specific to this static export
-- `images.unoptimized: true` is already set in `next.config.js`, so
-  `next/image` works with no image-optimization server (Cloudflare Pages
-  has none for a static deploy).
-- Next's static export already generates a `404.html` — Cloudflare Pages
-  picks this up automatically as the custom 404 page, no `_redirects` file
-  needed.
-- All dynamic behavior (booking creation, payments, notifications) happens
-  through Supabase Edge Functions called directly from the browser — there
-  is no Next.js server involved on this deployment, by design.
+**Workers & Pages → aura-crib-cms → Custom domains** — put it on its own
+subdomain (e.g. `cms.auracrib.com`), not the same host as the guest site.
+
+## Guest site (unchanged)
+
+Still exactly as before — plain static export, plain Cloudflare Pages,
+`out/` as the build output directory. Nothing in this update touches it
+directly.
+
+## Live testing checklist
+
+1. **CMS bootstrap**: `<cms-domain>/signup`, create your account, run the
+   one-time SQL from `README.md` to promote it to `super_admin`, sign in.
+2. **Client-side gating, not a flash of content**: open
+   `<cms-domain>/bookings` in an incognito window. You should briefly see
+   a spinner, then land on `/login` — never dashboard content, even for an
+   instant. (This is the one meaningful behavior change from the old
+   middleware version: there's now always a brief loading state before any
+   redirect, since the check can only happen after the page's JS runs. If
+   that flash feels too long in practice, that's a sign to revisit this —
+   but it should be near-instant on a warm session.)
+3. **RLS sanity check**: approve a second account as `staff` (not
+   manager/super_admin). Confirm the sidebar hides Calendar/Property/
+   Reports/Settings, *and* separately confirm they can't cancel a booking
+   even by hitting the drawer's cancel control directly — RLS should
+   reject it regardless of what the UI shows.
+4. **Refund path**: as manager/super_admin, cancel-and-refund a real
+   sandbox-paid booking. Confirm it succeeds, check the Edge Function logs
+   in the Supabase dashboard for the call, and confirm `staff_audit_log`
+   gets an entry.
+5. **Refund path, negative case**: sign in as a plain `staff` account and
+   confirm calling refund fails (403 from the Edge Function) even if you
+   could somehow trigger the call — this is the check that actually
+   matters now that there's no server-side gate in front of it.
+6. **Live content**: edit something in Property Content, confirm it saves.
+   Reminder: the guest site won't reflect it yet — its live-fetch from
+   `property_content` is still the flagged follow-up, not built.

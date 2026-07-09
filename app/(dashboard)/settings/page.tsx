@@ -1,31 +1,36 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getStaffProfile, isSuperAdmin } from "@/lib/auth";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useStaffProfile } from "@/lib/StaffProfileContext";
+import { isSuperAdmin } from "@/lib/auth";
 import StaffApprovalPanel from "@/components/StaffApprovalPanel";
 import AuditLogTable from "@/components/AuditLogTable";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { PageLoading, NotPermitted } from "@/components/PageStates";
+import { Terminal } from "lucide-react";
 import type { StaffProfile, AuditLogEntry } from "@/lib/types";
 
-export const metadata = { title: "Settings | Aura Crib CMS" };
+export default function SettingsPage() {
+  const { profile, loading: profileLoading } = useStaffProfile();
+  const [staff, setStaff] = useState<StaffProfile[] | null>(null);
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
 
-// Read-only visibility into whether payment provider secrets are configured.
-// The CMS never displays or edits the actual key values — those are set
-// with `supabase secrets set` per PAYMENT_SANDBOX_SETUP.md, out of band.
-const PAYMENT_ENV_CHECKS = [
-  { label: "M-Pesa (Daraja)", envVar: "MPESA_CONSUMER_KEY" },
-  { label: "Stripe", envVar: "STRIPE_SECRET_KEY" },
-  { label: "PayPal", envVar: "PAYPAL_CLIENT_ID" },
-];
+  useEffect(() => {
+    document.title = "Settings | Aura Crib CMS";
+    if (profileLoading || !isSuperAdmin(profile)) return;
+    const supabase = createClient();
+    Promise.all([
+      supabase.from("staff_profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("staff_audit_log").select("*").order("created_at", { ascending: false }).limit(100),
+    ]).then(([{ data: staffData }, { data: auditData }]) => {
+      setStaff((staffData as StaffProfile[]) ?? []);
+      setAuditLog((auditData as AuditLogEntry[]) ?? []);
+    });
+  }, [profileLoading, profile]);
 
-export default async function SettingsPage() {
-  const profile = await getStaffProfile();
-  if (!isSuperAdmin(profile)) redirect("/");
-
-  const supabase = await createClient();
-  const [{ data: staff }, { data: auditLog }] = await Promise.all([
-    supabase.from("staff_profiles").select("*").order("created_at", { ascending: false }),
-    supabase.from("staff_audit_log").select("*").order("created_at", { ascending: false }).limit(100),
-  ]);
+  if (profileLoading) return <PageLoading />;
+  if (!isSuperAdmin(profile)) return <NotPermitted />;
+  if (staff === null) return <PageLoading />;
 
   return (
     <div className="space-y-10">
@@ -36,44 +41,26 @@ export default async function SettingsPage() {
 
       <section className="space-y-3">
         <h2 className="font-bold text-earth-dark dark:text-cream">Staff</h2>
-        <StaffApprovalPanel staff={(staff as StaffProfile[]) ?? []} currentStaffId={profile!.id} />
+        <StaffApprovalPanel staff={staff} currentStaffId={profile!.id} />
       </section>
 
       <section className="space-y-3">
         <h2 className="font-bold text-earth-dark dark:text-cream">Payment providers</h2>
-        <p className="text-xs text-ink/50 dark:text-cream/50">
-          Configuration status only — keys are managed via Supabase secrets, never here.
-        </p>
-        <div className="card divide-y divide-earth/10 dark:divide-cream/10">
-          {PAYMENT_ENV_CHECKS.map((p) => {
-            const configured = Boolean(process.env[p.envVar]);
-            return (
-              <div key={p.envVar} className="flex items-center justify-between px-5 py-3">
-                <span className="text-sm font-semibold">{p.label}</span>
-                {configured ? (
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-moss">
-                    <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Configured
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-ink/40 dark:text-cream/40">
-                    <XCircle className="w-4 h-4" aria-hidden="true" /> Not set here
-                  </span>
-                )}
-              </div>
-            );
-          })}
+        <div className="card p-4 flex gap-3 items-start">
+          <Terminal className="w-4 h-4 text-ink/40 dark:text-cream/40 shrink-0 mt-0.5" aria-hidden="true" />
+          <p className="text-xs text-ink/60 dark:text-cream/60">
+            Payment provider secrets (M-Pesa, Stripe, PayPal) live in the shared Supabase
+            project's Edge Function secrets, not in this static app — there's nothing for the CMS
+            to read here to show a live "configured" status without a server of its own. Verify
+            configuration with <code className="mx-1">supabase secrets list</code> from the guest
+            site's repo, or in the Supabase dashboard under Edge Functions → Secrets.
+          </p>
         </div>
-        <p className="text-xs text-ink/40 dark:text-cream/40">
-          Note: provider secrets live in the shared Supabase project's Edge Function secrets, not
-          this app's environment — this panel checks the CMS's own env as a convenience and may
-          read "Not set here" even when the Edge Functions are correctly configured. Verify with
-          <code className="mx-1">supabase secrets list</code> for a definitive answer.
-        </p>
       </section>
 
       <section className="space-y-3">
         <h2 className="font-bold text-earth-dark dark:text-cream">Audit log</h2>
-        <AuditLogTable entries={(auditLog as AuditLogEntry[]) ?? []} staff={(staff as StaffProfile[]) ?? []} />
+        <AuditLogTable entries={auditLog} staff={staff} />
       </section>
     </div>
   );

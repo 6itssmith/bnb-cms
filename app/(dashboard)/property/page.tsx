@@ -1,17 +1,32 @@
-import { createClient } from "@/lib/supabase/server";
-import { getStaffProfile, canManage } from "@/lib/auth";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useStaffProfile } from "@/lib/StaffProfileContext";
+import { canManage } from "@/lib/auth";
 import PropertyContentForm from "@/components/PropertyContentForm";
+import { PageLoading, NotPermitted } from "@/components/PageStates";
 import type { PropertyContent } from "@/lib/types";
 
-export const metadata = { title: "Property Content | Aura Crib CMS" };
+export default function PropertyContentPage() {
+  const { profile, loading: profileLoading } = useStaffProfile();
+  const [content, setContent] = useState<PropertyContent | null | undefined>(undefined);
 
-export default async function PropertyContentPage() {
-  const profile = await getStaffProfile();
-  if (!canManage(profile)) redirect("/");
+  useEffect(() => {
+    document.title = "Property Content | Aura Crib CMS";
+    if (profileLoading || !canManage(profile)) return;
+    const supabase = createClient();
+    supabase
+      .from("property_content")
+      .select("*")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setContent((data as PropertyContent) ?? null));
+  }, [profileLoading, profile]);
 
-  const supabase = await createClient();
-  const { data } = await supabase.from("property_content").select("*").limit(1).maybeSingle();
+  if (profileLoading) return <PageLoading />;
+  if (!canManage(profile)) return <NotPermitted />;
+  if (content === undefined) return <PageLoading />;
 
   return (
     <div className="space-y-6">
@@ -22,7 +37,7 @@ export default async function PropertyContentPage() {
         </p>
       </div>
 
-      <PropertyContentForm content={data as PropertyContent | null} />
+      <PropertyContentForm content={content} />
     </div>
   );
 }

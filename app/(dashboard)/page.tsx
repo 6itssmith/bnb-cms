@@ -1,7 +1,11 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { CalendarCheck, CalendarX, Wallet, Hourglass, Percent } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/client";
 import StatCard from "@/components/StatCard";
 import TrendCharts from "@/components/TrendCharts";
+import { PageLoading } from "@/components/PageStates";
 import {
   buildTrend,
   occupancyRate,
@@ -12,19 +16,27 @@ import {
 } from "@/lib/metrics";
 import type { Booking } from "@/lib/types";
 
-export const metadata = { title: "Overview | Aura Crib CMS" };
+export default function OverviewPage() {
+  const [bookings, setBookings] = useState<Booking[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-export default async function OverviewPage() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("bookings")
-    .select("*")
-    .order("check_in", { ascending: false })
-    .limit(500);
+  useEffect(() => {
+    document.title = "Overview | Aura Crib CMS";
+    const supabase = createClient();
+    supabase
+      .from("bookings")
+      .select("*")
+      .order("check_in", { ascending: false })
+      .limit(500)
+      .then(({ data, error: err }) => {
+        if (err) setError(err.message);
+        setBookings((data as Booking[]) ?? []);
+      });
+  }, []);
 
-  const bookings = (data as Booking[]) ?? [];
+  if (bookings === null) return <PageLoading />;
+
   const currency = bookings[0]?.currency ?? "KES";
-
   const checkIns = todayCheckIns(bookings);
   const checkOuts = todayCheckOuts(bookings);
 
@@ -37,11 +49,7 @@ export default async function OverviewPage() {
         </p>
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600">
-          Couldn't load bookings: {error.message}
-        </p>
-      )}
+      {error && <p className="text-sm text-red-600">Couldn't load bookings: {error}</p>}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard

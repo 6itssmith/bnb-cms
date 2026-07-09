@@ -1,9 +1,11 @@
+"use client";
+
 import { Clock } from "lucide-react";
-import { getStaffProfile } from "@/lib/auth";
+import { useStaffProfile } from "@/lib/StaffProfileContext";
 import SignOutButton from "@/components/SignOutButton";
 
-export default async function PendingApprovalPage() {
-  const profile = await getStaffProfile();
+export default function PendingApprovalPage() {
+  const { profile } = useStaffProfile();
 
   return (
     <div className="min-h-screen flex items-center justify-center px-5 bg-cream">

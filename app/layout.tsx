@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { StaffProfileProvider } from "@/lib/StaffProfileContext";
 
 export const metadata: Metadata = {
   title: "Aura Crib — Staff CMS",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <StaffProfileProvider>{children}</StaffProfileProvider>
+      </body>
     </html>
   );
 }

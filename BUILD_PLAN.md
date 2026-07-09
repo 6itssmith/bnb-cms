@@ -1,8 +1,14 @@
 # Aura Crib CMS — Build Plan
 
-Status: **built** (see README.md for setup/bootstrap). This is kept as the
-original design reference; if behavior here and in the running app ever
-diverge, treat the code + README as current and this as historical intent.
+Status: **built**, then **re-architected from a Next.js server to a static
+export** for Cloudflare Pages hosting (see `CLOUDFLARE_DEPLOY.md` for the
+full rationale and what moved). The plan below still describes the
+original design intent; where §1 says "Normal Next.js (SSR/middleware)",
+that's now a static export instead — the CMS/guest-site split, the
+Supabase-as-shared-backend model, and every RLS policy in §2-3 are
+unchanged. This is kept as the original design reference; if behavior
+here and in the running app ever diverge, treat the code + README as
+current and this as historical intent.
 
 This covers the admin/CMS app per `Update_Module.md` §2, incorporating the
 decisions made so far:

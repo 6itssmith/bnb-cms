@@ -1,15 +1,28 @@
-import { createClient } from "@/lib/supabase/server";
-import { getStaffProfile, canManage } from "@/lib/auth";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useStaffProfile } from "@/lib/StaffProfileContext";
+import { canManage } from "@/lib/auth";
 import ReviewsModeration from "@/components/ReviewsModeration";
+import { PageLoading } from "@/components/PageStates";
 import type { Review } from "@/lib/types";
 
-export const metadata = { title: "Reviews | Aura Crib CMS" };
+export default function ReviewsPage() {
+  const { profile } = useStaffProfile();
+  const [reviews, setReviews] = useState<Review[] | null>(null);
 
-export default async function ReviewsPage() {
-  const supabase = await createClient();
-  const profile = await getStaffProfile();
+  useEffect(() => {
+    document.title = "Reviews | Aura Crib CMS";
+    const supabase = createClient();
+    supabase
+      .from("reviews")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setReviews((data as Review[]) ?? []));
+  }, []);
 
-  const { data } = await supabase.from("reviews").select("*").order("created_at", { ascending: false });
+  if (reviews === null) return <PageLoading />;
 
   return (
     <div className="space-y-6">
@@ -21,7 +34,7 @@ export default async function ReviewsPage() {
         </p>
       </div>
 
-      <ReviewsModeration reviews={(data as Review[]) ?? []} canModerate={canManage(profile)} />
+      <ReviewsModeration reviews={reviews} canModerate={canManage(profile)} />
     </div>
   );
 }
