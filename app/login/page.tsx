@@ -39,10 +39,10 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 justify-center mb-8">
           <Leaf className="w-6 h-6 text-moss" aria-hidden="true" />
-          <span className="font-bold text-xl text-earth-dark">Aura Crib CMS</span>
+          <span className="font-heading text-2xl text-earth-dark">Aura Crib CMS</span>
         </div>
 
-        <div className="card p-6">
+        <div className="card p-6" data-aos="fade-up">
           <h1 className="text-lg font-bold text-earth-dark mb-1">Staff sign in</h1>
           <p className="text-sm text-ink/60 mb-5">
             Access is by Super Admin approval only.

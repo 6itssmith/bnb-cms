@@ -33,7 +33,7 @@ export default function Sidebar({ role }: { role: StaffRole }) {
     <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 bg-white dark:bg-ink border-r border-earth/10 dark:border-cream/10">
       <div className="flex items-center gap-2 px-5 h-16 border-b border-earth/10 dark:border-cream/10">
         <Leaf className="w-5 h-5 text-moss" aria-hidden="true" />
-        <span className="font-bold text-earth-dark dark:text-cream">Aura Crib CMS</span>
+        <span className="font-heading text-xl text-earth-dark dark:text-cream">Aura Crib CMS</span>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {NAV.filter((item) => (item.roles as readonly string[]).includes(role)).map((item) => {

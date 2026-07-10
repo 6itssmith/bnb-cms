@@ -8,6 +8,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        body: ["Nunito", "sans-serif"],
+        heading: ["Quintessential", "cursive"],
+      },
       colors: {
         earth: {
           DEFAULT: "#8B5A2B",

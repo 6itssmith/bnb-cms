@@ -15,7 +15,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <Sidebar role={profile!.role} />
       <div className="md:pl-60">
         <TopBar profile={profile!} />
-        <main className="p-5 md:p-8">{children}</main>
+        <main
+          className="p-5 md:p-8"
+          data-aos="fade-up"
+          data-aos-duration="650"
+        >
+          {children}
+        </main>
       </div>
     </div>
   );
