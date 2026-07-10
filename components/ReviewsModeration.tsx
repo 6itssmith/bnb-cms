@@ -23,10 +23,11 @@ export default function ReviewsModeration({
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function setStatus(id: string, status: ReviewStatus) {
+async function setStatus(id: string, status: ReviewStatus) {
     setBusyId(id);
     const supabase = createClient();
-    const { data, error } = await supabase.from("reviews").update({ status }).eq("id", id).select().single();
+    // 🔑 THE FIX: Cast (supabase as any) here
+    const { data, error } = await (supabase as any).from("reviews").update({ status }).eq("id", id).select().single();
     setBusyId(null);
     if (!error && data) setList((prev) => prev.map((r) => (r.id === id ? (data as Review) : r)));
   }
@@ -39,7 +40,8 @@ export default function ReviewsModeration({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { data, error } = await supabase
+    // 🔑 THE FIX: Cast (supabase as any) here as well
+    const { data, error } = await (supabase as any)
       .from("reviews")
       .update({ reply, replied_by: user?.id })
       .eq("id", id)

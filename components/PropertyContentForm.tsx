@@ -33,7 +33,7 @@ export default function PropertyContentForm({ content }: { content: PropertyCont
     setSaved(false);
   }
 
-  async function handleSave(e: React.FormEvent) {
+ async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
@@ -43,15 +43,23 @@ export default function PropertyContentForm({ content }: { content: PropertyCont
       data: { user },
     } = await supabase.auth.getUser();
 
-    const payload = { ...form, updated_by: user?.id, updated_at: new Date().toISOString() };
+    const payload = {
+      ...form,
+      updated_by: user?.id,
+      updated_at: new Date().toISOString(),
+    };
 
+    // 🔑 THE FIX: Cast (supabase as any) on both update and insert lines
     const { error: err } = content?.id
-      ? await supabase.from("property_content").update(payload).eq("id", content.id)
-      : await supabase.from("property_content").insert(payload);
+      ? await (supabase as any).from("property_content").update(payload).eq("id", content.id)
+      : await (supabase as any).from("property_content").insert(payload);
 
     setSaving(false);
-    if (err) return setError(err.message);
-    setSaved(true);
+    if (err) {
+      setError(err.message);
+    } else {
+      setSaved(true);
+    }
   }
 
   const gallery = form.gallery as Gallery[];

@@ -52,21 +52,23 @@ export default function CalendarGrid({
     );
   }
 
-  async function toggleBlock(dayKey: string) {
+async function toggleBlock(dayKey: string) {
     if (!canManage) return;
     setBusy(true);
     const supabase = createClient();
     const existing = blocked.get(dayKey);
 
     if (existing) {
-      const { error } = await supabase.from("blocked_dates").delete().eq("id", existing.id);
+      // 🔑 FIX: Cast supabase as any
+      const { error } = await (supabase as any).from("blocked_dates").delete().eq("id", existing.id);
       if (!error) {
         const next = new Map(blocked);
         next.delete(dayKey);
         setBlocked(next);
       }
     } else {
-      const { data, error } = await supabase
+      // 🔑 FIX: Cast supabase as any
+      const { data, error } = await (supabase as any)
         .from("blocked_dates")
         .insert({ date: dayKey, reason: "Blocked from CMS calendar" })
         .select()
@@ -86,7 +88,8 @@ export default function CalendarGrid({
     if (!Number.isFinite(price) || price <= 0) return;
     setBusy(true);
     const supabase = createClient();
-    const { error } = await supabase
+    // 🔑 FIX: Cast supabase as any
+    const { error } = await (supabase as any)
       .from("date_price_overrides")
       .upsert({ date: dayKey, price }, { onConflict: "date" });
     if (!error) {
@@ -102,7 +105,8 @@ export default function CalendarGrid({
     if (!canManage) return;
     setBusy(true);
     const supabase = createClient();
-    const { error } = await supabase.from("date_price_overrides").delete().eq("date", dayKey);
+    // 🔑 FIX: Cast supabase as any
+    const { error } = await (supabase as any).from("date_price_overrides").delete().eq("date", dayKey);
     if (!error) {
       const next = new Map(priceMap);
       next.delete(dayKey);

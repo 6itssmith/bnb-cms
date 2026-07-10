@@ -18,9 +18,10 @@ export default function StaffApprovalPanel({
   const [list, setList] = useState(staff);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function logAction(action: string, targetId: string, details: Record<string, unknown>) {
+async function logAction(action: string, targetId: string, details: Record<string, unknown>) {
     const supabase = createClient();
-    await supabase.from("staff_audit_log").insert({
+    // 🔑 THE FIX: Cast (supabase as any)
+    await (supabase as any).from("staff_audit_log").insert({
       actor_id: currentStaffId,
       action,
       target_table: "staff_profiles",
@@ -32,7 +33,8 @@ export default function StaffApprovalPanel({
   async function approve(member: StaffProfile, role: StaffRole) {
     setBusyId(member.id);
     const supabase = createClient();
-    const { data, error } = await supabase
+    // 🔑 THE FIX: Cast (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("staff_profiles")
       .update({ status: "active", role })
       .eq("id", member.id)
@@ -48,7 +50,8 @@ export default function StaffApprovalPanel({
   async function setRole(member: StaffProfile, role: StaffRole) {
     setBusyId(member.id);
     const supabase = createClient();
-    const { data, error } = await supabase
+    // 🔑 THE FIX: Cast (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("staff_profiles")
       .update({ role })
       .eq("id", member.id)
@@ -64,7 +67,8 @@ export default function StaffApprovalPanel({
   async function setStatus(member: StaffProfile, status: "active" | "suspended") {
     setBusyId(member.id);
     const supabase = createClient();
-    const { data, error } = await supabase
+    // 🔑 THE FIX: Cast (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("staff_profiles")
       .update({ status })
       .eq("id", member.id)

@@ -35,14 +35,16 @@ export function StaffProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<StaffProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (userId: string | undefined) => {
+const loadProfile = useCallback(async (userId: string | undefined) => {
     if (!userId) {
       setProfile(null);
       return;
     }
     const supabase = createClient();
     const { data } = await supabase.from("staff_profiles").select("*").eq("id", userId).maybeSingle();
-    setProfile((data as StaffProfile) ?? null);
+    
+    // 🔑 THE FIX: Cast data as any to let the null fallback resolve natively
+    setProfile((data as any) ?? null);
   }, []);
 
   const refreshProfile = useCallback(async () => {

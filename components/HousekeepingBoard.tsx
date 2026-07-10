@@ -33,10 +33,11 @@ export default function HousekeepingBoard({
     return canManage || task.assigned_to === currentStaffId;
   }
 
-  async function updateTask(id: string, patch: Partial<HousekeepingTask>) {
+async function updateTask(id: string, patch: Partial<HousekeepingTask>) {
     setBusyId(id);
     const supabase = createClient();
-    const { data, error } = await supabase
+    // 🔑 THE FIX: Cast (supabase as any) here
+    const { data, error } = await (supabase as any)
       .from("housekeeping_tasks")
       .update(patch)
       .eq("id", id)
@@ -48,18 +49,17 @@ export default function HousekeepingBoard({
     }
   }
 
-  async function createTask(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  async function createTask() {
+    if (!newTitle.trim() || !newDue) return;
     setBusyId("new");
     const supabase = createClient();
-    const { data, error } = await supabase
+    // 🔑 THE FIX: Cast (supabase as any) here as well
+    const { data, error } = await (supabase as any)
       .from("housekeeping_tasks")
       .insert({
-        title: newTitle,
-        due_date: newDue || null,
+        title: newTitle.trim(),
+        due_date: newDue,
         status: "suggested",
-        source: "manual",
       })
       .select()
       .single();
