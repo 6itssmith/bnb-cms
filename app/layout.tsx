@@ -11,7 +11,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try { const savedTheme = localStorage.getItem("aura-crib-theme"); const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches; document.documentElement.classList.toggle("dark", savedTheme ? savedTheme === "dark" : prefersDark); } catch {}`,
+          }}
+        />
+      </head>
       <body>
         <StaffProfileProvider>
           <AosInitializer />

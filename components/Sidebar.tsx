@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { StaffRole } from "@/lib/types";
 
-const NAV = [
+export const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard, roles: ["super_admin", "manager", "staff"] },
   { href: "/calendar", label: "Calendar", icon: CalendarDays, roles: ["super_admin", "manager"] },
   { href: "/bookings", label: "Bookings", icon: BookOpen, roles: ["super_admin", "manager", "staff"] },
