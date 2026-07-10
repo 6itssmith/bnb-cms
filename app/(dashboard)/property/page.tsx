@@ -21,7 +21,7 @@ export default function PropertyContentPage() {
       .select("*")
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => setContent((data as PropertyContent) ?? null));
+      .then(({ data }) => setContent((data as any) ?? null));
   }, [profileLoading, profile]);
 
   if (profileLoading) return <PageLoading />;
