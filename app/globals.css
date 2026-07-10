@@ -22,6 +22,25 @@ html.dark body {
   @apply bg-ink text-cream;
 }
 
+/* Applied briefly by ThemeToggle, avoiding permanent transitions on every interaction. */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-duration: 250ms;
+  transition-timing-function: ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition-duration: 0ms;
+  }
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
