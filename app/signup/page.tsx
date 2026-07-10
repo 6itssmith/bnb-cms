@@ -51,13 +51,14 @@ export default function SignupPage() {
     // RLS policy "a user can create their own pending profile at signup"
     // only allows status='pending', role='staff' regardless of what's sent
     // here — that enforcement is server-side, not just this form.
-    const { error: profileError } = await supabase.from("staff_profiles").insert({
-      id: userId,
-      full_name: fullName,
-      email,
-      role: "staff",
-      status: "pending",
-    });
+//  THE FIX: Add (as any) before the insert object literal
+const { error: profileError } = await supabase.from("staff_profiles").insert({
+  id: userId,
+  full_name: fullName,
+  email,
+  role: "staff",
+  status: "pending"
+} as any);
 
     if (profileError) {
       console.error("Profile insert error:", profileError);
