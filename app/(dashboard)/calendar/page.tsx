@@ -36,8 +36,9 @@ export default function CalendarPage() {
         bookings: (bookings as CalendarData["bookings"]) ?? [],
         blockedDates: (blocked as BlockedDate[]) ?? [],
         overrides: overrides ?? [],
-        basePrice: property?.base_price_per_night ?? 0,
-        currency: property?.currency ?? "KES",
+       // FIXED TYPE CASTING FOR THE COMPILER
+basePrice: (property as any)?.base_price_per_night ?? 0,
+currency: (property as any)?.currency ?? "KES",
       });
     });
   }, []);
